@@ -2,6 +2,9 @@
 name: Lint Google Colab Notebook
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
