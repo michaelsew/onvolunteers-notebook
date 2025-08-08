@@ -1,0 +1,33 @@
+# .github/workflows/lint-notebook.yml
+name: Lint Google Colab Notebook
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x' # Use the latest Python 3 version
+
+    - name: Install dependencies
+      run: |
+        pip install nbformat flake8 nbqa
+
+    - name: Validate notebook JSON structure
+      run: |
+        python -m nbformat --validate google_drive_reporting.ipynb
+
+    - name: Lint Python code in notebook
+      run: |
+        nbqa flake8 google_drive_reporting.ipynb
+      continue-on-error: true # Linting results are informational only, as per your preference
