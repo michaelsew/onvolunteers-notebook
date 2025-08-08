@@ -2,7 +2,7 @@
 name: Lint Google Colab Notebook
 
 on:
-  push:
+  pull_request:
     branches:
       - main
 
@@ -25,7 +25,7 @@ jobs:
 
     - name: Validate notebook JSON structure
       run: |
-        python -m nbformat --validate google_drive_reporting.ipynb
+        python -c "import nbformat; f = open('google_drive_reporting.ipynb', 'r'); nbformat.read(f, as_version=4); f.close()"
 
     - name: Lint Python code in notebook
       run: |
