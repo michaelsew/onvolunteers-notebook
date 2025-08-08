@@ -25,7 +25,7 @@ jobs:
 
     - name: Validate notebook JSON structure
       run: |
-        python -c "import nbformat; f = open('google_drive_reporting.ipynb', 'r'); nbformat.read(f, as_version=4); f.close()"
+        cat google_drive_reporting.ipynb | python -c "import nbformat, sys; nbformat.reads(sys.stdin.read(), as_version=4)"
 
     - name: Lint Python code in notebook
       run: |
