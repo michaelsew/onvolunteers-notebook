@@ -17,20 +17,15 @@ A repository for a Google Colab notebook that analyzes data from Google Drive.
     git clone https://github.com/michaelsew/onvolunteers-notebook.git
     cd onvolunteers-notebook
     ```
-2.  Create and activate a virtual environment:
+1.  Create/Activate virtual env, install any required packages, and start the notebook server:
     ```bash
     uv venv
     source .venv/bin/activate
+    pip install -r requirements.txt
+    jupyter notebook
     ```
-3.  Install the required dependencies:
-    ```bash
-    uv pip install -r requirements.txt
-    ```
-4.  Start the Jupyter Notebook server:
-    ```bash
-    jupyter notebookx
-    ```
-5.  Open the `google_drive_reporting.ipynb` notebook in your browser.
+    
+1.  Open the `google_drive_reporting.ipynb` notebook in your browser.
 
 ### Alternative: Using `venv` and `pip`
 
