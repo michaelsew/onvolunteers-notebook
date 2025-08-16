@@ -12,39 +12,36 @@ A repository for a Google Colab notebook that analyzes data from Google Drive.
 
 ### Recommended: Using `uv`
 
-1.  Clone this repository:
+1.  Clone the repository, create a virtual environment, install dependencies, and start the notebook server:
     ```bash
-    git clone https://github.com/michaelsew/onvolunteers-notebook.git
-    cd onvolunteers-notebook
-    ```
-1.  Create/Activate virtual env, install any required packages, and start the notebook server:
-    ```bash
-    uv venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
+    git clone https://github.com/michaelsew/onvolunteers-notebook.git && \
+    cd onvolunteers-notebook && \
+    uv venv && \
+    source .venv/bin/activate && \
+    pip install -r requirements.txt && \
     jupyter notebook
     ```
-    
-1.  Open the `google_drive_reporting.ipynb` notebook in your browser.
+2.  Open the `google_drive_reporting.ipynb` notebook in your browser.
+
 
 ### Alternative: Using `venv` and `pip`
 
-1.  Clone this repository:
+1.  Clone the repository, create a virtual environment, install dependencies, and start the notebook server:
     ```bash
-    git clone https://github.com/michaelsew/onvolunteers-notebook.git
-    cd onvolunteers-notebook
-    ```
-2.  Create and activate a virtual environment:
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
-3.  Install the required dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  Start the Jupyter Notebook server:
-    ```bash
+    git clone https://github.com/michaelsew/onvolunteers-notebook.git && \
+    cd onvolunteers-notebook && \
+    python3 -m venv .venv && \
+    source .venv/bin/activate && \
+    pip install -r requirements.txt && \
     jupyter notebook
     ```
-5.  Open the `google_drive_reporting.ipynb` notebook in your browser.
+2.  Open the `google_drive_reporting.ipynb` notebook in your browser.
+
+
+## Running with Podman
+
+For those who prefer containerization, you can run the Jupyter notebook using Podman:
+
+```bash
+podman run -p 8888:8888 -v "$(pwd)":/home/jovyan/work jupyter/minimal-notebook
+```
