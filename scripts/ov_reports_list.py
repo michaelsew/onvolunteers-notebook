@@ -39,6 +39,7 @@ async def login(browser, username, password):
 
     return page
 
+
 async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
@@ -83,10 +84,19 @@ async def main():
         logging.debug("Taking screenshot: report.png ... OK")
         await page.screenshot(path="report.png")
 
-        logging.info("The browser will close in 10 seconds.")
-        await asyncio.sleep(10)
+        logging.debug("Waiting for 'Close' button to appear ...")
+        await page.wait_for_selector("text=Close")
+        logging.info("Report generated successfully. 'Close' button found.")
 
-        await browser.close()
+        logging.debug("Clicking 'Close' button ...")
+        await page.wait_for_load_state("networkidle") # Wait for network to be idle
+        await page.get_by_text("Close").click()
+        logging.info("Clicked 'Close' button. Returned to report selection.")
+
+        logging.info("The browser will close in 5 seconds.")
+        await asyncio.sleep(5)
+
+        # await browser.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
