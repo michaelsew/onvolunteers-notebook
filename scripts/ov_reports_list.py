@@ -2,29 +2,43 @@ import asyncio
 from playwright.async_api import async_playwright
 import getpass
 import os
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler()
+    ]
+)
 
 async def login(browser, username, password):
     page = await browser.new_page()
 
-    # Navigate to the login page
+    logging.debug("Navigating to http://sfx.onvolunteers.com ...")
     await page.goto("http://sfx.onvolunteers.com")
 
-    # Click the "Administrator Click Here" link
+    logging.debug("Clicking Administrator Click Here button ...")
     await page.get_by_role("link", name="Administrator Click Here ").click()
+    logging.debug("Waiting for Administrator Login screen ... OK")
+    await page.wait_for_selector("text=Administrator Login")
 
-    # Fill in the username and password
+    logging.debug("Filling username ...")
     await page.get_by_placeholder("username or email").fill(username)
+    logging.debug("Filling password ...")
     await page.get_by_placeholder("password").fill(password)
 
-    # Click the login button
+    logging.debug("Clicking Login button ...")
     await page.get_by_role("link", name="Login").click()
 
-    # Wait for navigation to complete
+    logging.debug("Waiting for successful login navigation ...")
     await page.wait_for_url("https://portal.onvolunteers.com/Default.aspx")
 
-    print("Successfully logged in.")
+    logging.info("Successfully logged in.")
 
     return page
+
 
 async def main():
     async with async_playwright() as p:
@@ -35,45 +49,69 @@ async def main():
         password = os.environ.get("OV_PASSWORD")
 
         if not username or not password:
-            print("Environment variables OV_USERNAME and OV_PASSWORD not found, prompting for credentials.")
+            logging.info("Environment variables OV_USERNAME and OV_PASSWORD not found, prompting for credentials.")
             username = input("Please enter your username: ")
             password = getpass.getpass("Please enter your password: ")
 
         page = await login(browser, username, password)
 
-        # Hover over the "Reports" menu
+        logging.debug("Hovering over Reports menu ...")
         await page.get_by_role("link", name=" Reports").hover()
 
-        # Click the "Built-in Reports" link
+        logging.debug("Clicking Built-in Reports link ...")
         await page.get_by_role("link", name="Built-in Reports").click()
 
-        # Wait for the reports page to load
+        logging.debug("Waiting for reports page to load ...")
         await page.wait_for_url("https://portal.onvolunteers.com/Report.aspx")
 
-        # Get the report options from the combobox
+        logging.debug("Getting report options from combobox ...")
         report_options_text = await page.get_by_role("combobox").inner_text()
         report_options = report_options_text.splitlines()
 
-        print("Available reports:")
-        for option in report_options:
-            if option != "Select Report":
-                print(option)
+        logging.info("Available reports:")
+        valid_reports = [option for option in report_options if option != "Select Report"]
+        for i, option in enumerate(valid_reports):
+            logging.info(f"{i+1}. {option}")
 
-        # Select the "User Volunteer Hours" report
-        await page.get_by_role("combobox").select_option(label="User Volunteer Hours")
+        selected_report = None
+        while selected_report not in valid_reports:
+            try:
+                choice = input("Enter the number of the report to generate: ")
+                index = int(choice) - 1
+                if 0 <= index < len(valid_reports):
+                    selected_report = valid_reports[index]
+                else:
+                    logging.warning("Invalid number. Please try again.")
+            except ValueError:
+                logging.warning("Invalid input. Please enter a number.")
 
-        # Click the "Generate Report" button
+        logging.info(f"Selecting '{selected_report}' report ...")
+        await page.get_by_role("combobox").select_option(label=selected_report)
+
+        logging.debug("Clicking Generate Report button ...")
         await page.get_by_role("link", name="Generate Report").click()
 
-        # Wait for the report to be generated
+        logging.debug("Waiting for report generation (5 seconds) ...")
         await asyncio.sleep(5)
+        logging.debug("Taking screenshot: report.png ... OK")
         await page.screenshot(path="report.png")
 
-        # Keep the browser open for a while to see the result
-        print("The browser will close in 10 seconds.")
-        await asyncio.sleep(10)
+        try:
+            logging.debug("Waiting for 'Close' button to appear (max 10 seconds) ...")
+            await page.wait_for_selector("text=Close", timeout=10000)
+            logging.info("Report generated successfully. 'Close' button found.")
 
-        await browser.close()
+            logging.debug("Clicking 'Close' button ...")
+            await page.wait_for_load_state("networkidle") # Wait for network to be idle
+            await page.get_by_text("Close").click()
+            logging.info("Clicked 'Close' button. Returned to report selection.")
+        except Exception as e:
+            logging.warning(f"Could not find or click 'Close' button: {e}. Assuming report generation completed without a 'Close' prompt or it navigated to a different page.")
+
+        logging.info("The browser will close in 5 seconds.")
+        await asyncio.sleep(5)
+
+        # await browser.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

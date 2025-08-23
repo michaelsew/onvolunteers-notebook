@@ -45,3 +45,17 @@ For those who prefer containerization, you can run the Jupyter notebook using Po
 ```bash
 podman run -p 8888:8888 -v "$(pwd)":/home/jovyan/work jupyter/minimal-notebook
 ```
+
+## Cleaning Up: `uv cleanup` Operations
+
+To remove the virtual environment and any logs generated during usage, you can use the following commands:
+
+```bash
+# Remove the virtual environment created by uv
+uv venv remove
+
+# Remove log files (example: app.log)
+rm -f scripts/app.log
+```
+
+This will help keep your workspace clean by deleting the `.venv` folder and any log files such as `app.log`. Adjust the log file path as needed for your setup.

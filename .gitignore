@@ -134,6 +134,8 @@ venv.bak/
 # mkdocs documentation
 /site
 
+**/*.log
+
 # mypy
 .mypy_cache/
 .dmypy.json
@@ -150,3 +152,6 @@ cython_debug/
 
 # VSCode
 .vscode/
+
+# Claude
+.claude/
