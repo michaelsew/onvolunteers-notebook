@@ -69,12 +69,24 @@ async def main():
         report_options = report_options_text.splitlines()
 
         logging.info("Available reports:")
-        for option in report_options:
-            if option != "Select Report":
-                logging.debug(option)
+        valid_reports = [option for option in report_options if option != "Select Report"]
+        for i, option in enumerate(valid_reports):
+            logging.info(f"{i+1}. {option}")
 
-        logging.debug("Selecting 'User Volunteer Hours' report ...")
-        await page.get_by_role("combobox").select_option(label="User Volunteer Hours")
+        selected_report = None
+        while selected_report not in valid_reports:
+            try:
+                choice = input("Enter the number of the report to generate: ")
+                index = int(choice) - 1
+                if 0 <= index < len(valid_reports):
+                    selected_report = valid_reports[index]
+                else:
+                    logging.warning("Invalid number. Please try again.")
+            except ValueError:
+                logging.warning("Invalid input. Please enter a number.")
+
+        logging.info(f"Selecting '{selected_report}' report ...")
+        await page.get_by_role("combobox").select_option(label=selected_report)
 
         logging.debug("Clicking Generate Report button ...")
         await page.get_by_role("link", name="Generate Report").click()
@@ -84,14 +96,17 @@ async def main():
         logging.debug("Taking screenshot: report.png ... OK")
         await page.screenshot(path="report.png")
 
-        logging.debug("Waiting for 'Close' button to appear ...")
-        await page.wait_for_selector("text=Close")
-        logging.info("Report generated successfully. 'Close' button found.")
+        try:
+            logging.debug("Waiting for 'Close' button to appear (max 10 seconds) ...")
+            await page.wait_for_selector("text=Close", timeout=10000)
+            logging.info("Report generated successfully. 'Close' button found.")
 
-        logging.debug("Clicking 'Close' button ...")
-        await page.wait_for_load_state("networkidle") # Wait for network to be idle
-        await page.get_by_text("Close").click()
-        logging.info("Clicked 'Close' button. Returned to report selection.")
+            logging.debug("Clicking 'Close' button ...")
+            await page.wait_for_load_state("networkidle") # Wait for network to be idle
+            await page.get_by_text("Close").click()
+            logging.info("Clicked 'Close' button. Returned to report selection.")
+        except Exception as e:
+            logging.warning(f"Could not find or click 'Close' button: {e}. Assuming report generation completed without a 'Close' prompt or it navigated to a different page.")
 
         logging.info("The browser will close in 5 seconds.")
         await asyncio.sleep(5)
