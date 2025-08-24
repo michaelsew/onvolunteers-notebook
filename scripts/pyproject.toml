@@ -4,5 +4,6 @@ version = "0.1.0"
 description = "Scripts for OnVolunteers notebook"
 requires-python = ">=3.13"
 dependencies = [
-    "playwright"
+    "dotenv>=0.9.9",
+    "playwright",
 ]
