@@ -158,3 +158,20 @@ cython_debug/
 
 # OnVolunteers credentials
 ov.env
+scripts/ov.env
+
+# MCP server configurations (user-specific)
+.mcp/config.json
+
+# Google Cloud credentials and tokens
+.config/gdrive/credentials.json
+.config/gdrive/token.json
+~/.cache/gmail-mcp/
+
+# Additional secret patterns
+**/credentials.json
+**/token.json
+**/*secret*
+**/*key*
+.env
+.env.*
