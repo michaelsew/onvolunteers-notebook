@@ -23,8 +23,13 @@
       "env": {
         "CLIENT_ID": "YOUR_GOOGLE_CLIENT_ID",
         "CLIENT_SECRET": "YOUR_GOOGLE_CLIENT_SECRET",
-        "GDRIVE_CREDS_DIR": "/Users/michaelsew/work/onvolunteers-notebook/.config/gdrive"
+        "GDRIVE_CREDS_DIR": "/path/to/your/project/.config/gdrive"
       },
+      "disabled": false,
+      "autoApprove": []
+    },
+    "n8n-mcp": {
+      "url": "http://localhost:3001",
       "disabled": false,
       "autoApprove": []
     }
