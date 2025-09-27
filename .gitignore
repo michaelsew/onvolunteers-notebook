@@ -175,3 +175,10 @@ scripts/ov.env
 **/*key*
 .env
 .env.*
+
+# Log files
+*.log
+scripts/*.log
+
+# macOS specific
+.DS_Store
