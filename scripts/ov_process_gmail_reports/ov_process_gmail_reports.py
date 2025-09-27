@@ -10,6 +10,11 @@ from googleapiclient.http import MediaFileUpload
 import pandas as pd
 from dotenv import load_dotenv
 
+# ov_process_gmail_reports.py
+# This script processes GMail emails containing OnVolunteers reports
+# Renames them based on their content, and
+# and uploads them to a specified Google Drive folder.
+
 # --- Get the directory of the script ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -21,6 +26,7 @@ REPORTS_DIR = os.getenv("REPORTS_DIR", os.path.join(SCRIPT_DIR, "reports"))
 TOKEN_FILE = os.path.join(SCRIPT_DIR, "token.json")
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/drive"]
 GDRIVE_TARGET_FOLDER = "/My Drive/PTA 2025-2026 SHARED FOLDER/SubCommittees/OnVolunteers/Reports"
+
 # Threshold to differentiate reports. If sum of "Total Hours" is > this value, it's a volunteer report.
 HOURS_THRESHOLD = 1000
 
