@@ -158,7 +158,8 @@ cython_debug/
 
 # OnVolunteers credentials
 ov.env
-scripts/ov.env
+scripts/ov_reports_list/ov.env
+scripts/process_gmail_reports/gmail_gdrive.env
 
 # MCP server configurations (user-specific)
 .mcp/config.json
@@ -167,6 +168,7 @@ scripts/ov.env
 .config/gdrive/credentials.json
 .config/gdrive/token.json
 ~/.cache/gmail-mcp/
+scripts/process_gmail_reports/token.json
 
 # Additional secret patterns
 **/credentials.json
@@ -178,7 +180,10 @@ scripts/ov.env
 
 # Log files
 *.log
-scripts/*.log
+scripts/process_gmail_reports/process_gmail_reports.log
 
 # macOS specific
 .DS_Store
+
+# Local reports directory
+scripts/process_gmail_reports/reports/
