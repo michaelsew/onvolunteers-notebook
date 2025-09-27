@@ -187,3 +187,6 @@ scripts/ov_process_gmail_reports/process_gmail_reports.log
 
 # Local reports directory
 scripts/ov_process_gmail_reports/reports/
+
+sample/
+n8n/stub-workflow.json
