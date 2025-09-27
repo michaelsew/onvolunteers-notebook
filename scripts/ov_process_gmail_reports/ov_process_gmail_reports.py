@@ -28,7 +28,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googlea
 GDRIVE_TARGET_FOLDER = "/My Drive/PTA 2025-2026 SHARED FOLDER/SubCommittees/OnVolunteers/Reports"
 
 # Threshold to differentiate reports. If sum of "Total Hours" is > this value, it's a volunteer report.
-HOURS_THRESHOLD = 1000
+HOURS_THRESHOLD = 4
 
 # --- Logging Setup ---
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -72,8 +72,8 @@ def get_report_type(file_path):
     try:
         df = pd.read_excel(file_path, header=0)
         if "Total Hours" in df.columns:
-            total_hours = df["Total Hours"].sum()
-            if total_hours > HOURS_THRESHOLD:
+            average_total_hours = df["Total Hours"].mean()
+            if average_total_hours >= HOURS_THRESHOLD:
                 return "volunteer"
             else:
                 return "parking"
