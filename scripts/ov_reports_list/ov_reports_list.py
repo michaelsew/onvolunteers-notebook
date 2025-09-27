@@ -8,7 +8,9 @@ import os
 from playwright.async_api import async_playwright
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path='ov.env')
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'ov.env'))
 
 async def main():
     """
