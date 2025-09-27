@@ -7,8 +7,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
+from google.auth.transport.requests import Request
 import pandas as pd
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
 # ov_process_gmail_reports.py
 # This script processes GMail emails containing OnVolunteers reports
@@ -19,10 +21,10 @@ from dotenv import load_dotenv
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- Configuration ---
-load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, '.env'))
+load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'gmail_gdrive.env'))
 GDRIVE_CREDENTIALS_FILE = os.getenv("GDRIVE_CREDENTIALS_FILE", "credentials.json")
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(SCRIPT_DIR, "process_gmail_reports.log"))
-REPORTS_DIR = os.getenv("REPORTS_DIR", os.path.join(SCRIPT_DIR, "reports"))
+REPORTS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, os.getenv("REPORTS_DIR", "reports")))
 TOKEN_FILE = os.path.join(SCRIPT_DIR, "token.json")
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/drive"]
 GDRIVE_TARGET_FOLDER = "/My Drive/PTA 2025-2026 SHARED FOLDER/SubCommittees/OnVolunteers/Reports"
@@ -49,9 +51,11 @@ def get_credentials():
     return creds
 
 def search_emails(service, sender, subject):
-    """Searches for emails from a specific sender with a specific subject."""
+    """Searches for emails from a specific sender with a specific subject, unread and from the past day."""
     try:
-        query = f"from:{sender} subject:{subject}"
+        yesterday = datetime.now() - timedelta(days=1)
+        yesterday_date = yesterday.strftime("%Y/%m/%d")
+        query = f"from:{sender} subject:{subject} is:unread after:{yesterday_date}"
         result = service.users().messages().list(userId="me", q=query).execute()
         messages = result.get("messages", [])
         return messages
@@ -142,23 +146,74 @@ def main():
                 attachment = get_attachment(gmail_service, msg_id, part["body"]["attachmentId"])
                 if attachment:
                     file_data = base64.urlsafe_b64decode(attachment["data"].encode("UTF-8"))
-                    original_filename = part["filename"]
+                    original_filename = part["filename"].lstrip('/')
                     local_path = os.path.join(REPORTS_DIR, original_filename)
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
                     with open(local_path, "wb") as f:
                         f.write(file_data)
                     logging.info(f"Downloaded attachment: {original_filename}")
 
                     report_type = get_report_type(local_path)
                     if report_type != "unknown":
-                        # Create the new filename
-                        timestamp = original_filename.split("__")[-1].split(".")[0]
-                        new_filename = f"{report_type}_hours_report_{timestamp}.xlsx"
-                        new_local_path = os.path.join(REPORTS_DIR, new_filename)
-                        os.rename(local_path, new_local_path)
-                        logging.info(f"Renamed file to: {new_filename}")
+                        # Extract date from original filename (e.g., OnVolunteers_Volunteer_Hours_Report2025-09-27__125741.xlsx)
+                        # The date is typically before the double underscore and after 'Report'
+                        try:
+                            date_str = original_filename.split("Report")[-1].split("__")[0]
+                            # Attempt to parse various date formats
+                            for fmt in ("%Y-%m-%d", "%Y%m%d"):
+                                try:
+                                    report_date = datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
+                                    break
+                                except ValueError:
+                                    pass
+                            else:
+                                logging.warning(f"Could not parse date from filename: {original_filename}. Using current date.")
+                                report_date = datetime.now().strftime("%Y-%m-%d")
+                        except IndexError:
+                            logging.warning(f"Could not extract date from filename: {original_filename}. Using current date.")
+                            report_date = datetime.now().strftime("%Y-%m-%d")
+
+                        # Determine the subdirectory and base filename
+                        if report_type == "parking":
+                            subdir = "parking-hours"
+                            base_name = f"parking-hours-{report_date}.xlsx"
+                        elif report_type == "volunteer":
+                            subdir = "volunteer-hours"
+                            base_name = f"volunteer-hours-{report_date}.xlsx"
+                        else:
+                            # Fallback for unknown types, though we filter for them
+                            subdir = "unknown-reports"
+                            base_name = f"unknown-{report_date}.xlsx"
+
+                        target_dir = os.path.join(REPORTS_DIR, subdir)
+                        os.makedirs(target_dir, exist_ok=True)
+
+                        final_filename = base_name
+                        final_local_path = os.path.join(target_dir, final_filename)
+
+                        # Conflict resolution logic
+                        if os.path.exists(final_local_path):
+                            logging.info(f"File {final_filename} already exists. Checking for timestamped version.")
+                            # Try saving with a more specific timestamp
+                            current_time = datetime.now().strftime("%H%M")
+                            timestamped_filename = f"{report_type}-hours-{report_date}_{current_time}.xlsx"
+                            timestamped_local_path = os.path.join(target_dir, timestamped_filename)
+
+                            if os.path.exists(timestamped_local_path):
+                                logging.info(f"Timestamped file {timestamped_filename} also exists. Overwriting.")
+                                final_local_path = timestamped_local_path
+                                final_filename = timestamped_filename
+                            else:
+                                logging.info(f"Saving as timestamped file: {timestamped_filename}")
+                                final_local_path = timestamped_local_path
+                                final_filename = timestamped_filename
+                        
+                        # Rename the downloaded file to its final name and location
+                        os.rename(local_path, final_local_path)
+                        logging.info(f"Renamed file to: {final_filename}")
 
                         # Upload to Google Drive
-                        upload_to_gdrive(drive_service, new_local_path, folder_id)
+                        upload_to_gdrive(drive_service, final_local_path, folder_id)
                         
                         # Optional: Mark email as read (or delete)
                         # gmail_service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
