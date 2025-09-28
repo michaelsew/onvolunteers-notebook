@@ -246,6 +246,9 @@ def main():
                         # Optional: Mark email as read (or delete)
                         if not args.keep_unread:
                             gmail_service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
+                            logging.info(f"Email {msg_id} marked as read.")
+                        else:
+                            logging.info(f"Email {msg_id} left unread as per --keep-unread flag.")
 
     end_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     logging.info(f"### ov_process_gmail_reports FINISHED {end_time} ###")
