@@ -22,18 +22,31 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- Configuration ---
 load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'gmail_gdrive.env'))
-GDRIVE_CREDENTIALS_FILE = os.getenv("GDRIVE_CREDENTIALS_FILE", "credentials.json")
+GDRIVE_CREDENTIALS_FILE = os.path.join(SCRIPT_DIR, os.getenv("GDRIVE_CREDENTIALS_FILE", "credentials.json"))
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(SCRIPT_DIR, "process_gmail_reports.log"))
 REPORTS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, os.getenv("REPORTS_DIR", "reports")))
 TOKEN_FILE = os.path.join(SCRIPT_DIR, "token.json")
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/drive"]
 GDRIVE_TARGET_FOLDER = "/My Drive/PTA 2025-2026 SHARED FOLDER/SubCommittees/OnVolunteers/Reports"
 
 # Threshold to differentiate reports. If sum of "Total Hours" is > this value, it's a volunteer report.
 HOURS_THRESHOLD = 4
 
 # --- Logging Setup ---
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# --- Logging Setup ---
+# Get the root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+# Create a file handler
+file_handler = logging.FileHandler(LOG_FILE)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+root_logger.addHandler(file_handler)
+
+# Create a stream handler (for console output)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+root_logger.addHandler(stream_handler)
 
 def get_credentials():
     """Gets user credentials from the specified credentials file."""
@@ -77,10 +90,9 @@ def get_report_type(file_path):
         df = pd.read_excel(file_path, header=0)
         if "Total Hours" in df.columns:
             average_total_hours = df["Total Hours"].mean()
-            if average_total_hours >= HOURS_THRESHOLD:
-                return "volunteer"
-            else:
-                return "parking"
+            report_type = "volunteer" if average_total_hours >= HOURS_THRESHOLD else "parking"
+            logging.info(f"Report: {os.path.basename(file_path)} - Average Total Hours: {average_total_hours:.2f}. Threshold: {HOURS_THRESHOLD}. Determined type: {report_type}")
+            return report_type
         else:
             logging.warning(f"'Total Hours' column not found in {file_path}. Could not determine report type.")
             return "unknown"
@@ -118,6 +130,8 @@ def upload_to_gdrive(service, file_path, folder_id):
 
 def main():
     """Main function to process emails and attachments."""
+    start_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    logging.info(f"### ov_process_gmail_reports STARTED {start_time} ###")
     logging.info("Starting email processing...")
     creds = get_credentials()
     gmail_service = build("gmail", "v1", credentials=creds)
@@ -142,7 +156,7 @@ def main():
         msg_id = msg["id"]
         message = gmail_service.users().messages().get(userId="me", id=msg_id).execute()
         for part in message["payload"]["parts"]:
-            if part["filename"] and part["filename"].endswith(".xlsx"):
+            if part["filename"] and part["filename"].endswith(".xlsx") and "OnVolunteers_Volunteer_Hours_Report" in part["filename"]:
                 attachment = get_attachment(gmail_service, msg_id, part["body"]["attachmentId"])
                 if attachment:
                     file_data = base64.urlsafe_b64decode(attachment["data"].encode("UTF-8"))
@@ -216,9 +230,10 @@ def main():
                         upload_to_gdrive(drive_service, final_local_path, folder_id)
                         
                         # Optional: Mark email as read (or delete)
-                        # gmail_service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
+                        gmail_service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
 
-    logging.info("Email processing finished.")
+    end_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    logging.info(f"### ov_process_gmail_reports FINISHED {end_time} ###")
 
 if __name__ == "__main__":
     main()
