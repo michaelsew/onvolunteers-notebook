@@ -133,15 +133,19 @@ def main():
     """Main function to process emails and attachments."""
     parser = argparse.ArgumentParser(description="Process OnVolunteers report emails from Gmail and upload to Google Drive.")
     parser.add_argument(
-        "--mark-unread",
-        action="store_false",
-        default=True,
-        help="Do not mark processed emails as unread (default: True, i.e., mark as read)"
+        "--keep-unread",
+        action="store_true",
+        default=False,
+        help="Keep processed emails as unread (default: False, i.e., mark as read)"
     )
     args = parser.parse_args()
 
     start_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     logging.info(f"### ov_process_gmail_reports STARTED {start_time} ###")
+    if args.keep_unread:
+        logging.info("Processed emails will be kept unread.")
+    else:
+        logging.info("Processed emails will be marked as read.")
     logging.info("Starting email processing...")
     creds = get_credentials()
     gmail_service = build("gmail", "v1", credentials=creds)
@@ -240,7 +244,7 @@ def main():
                         upload_to_gdrive(drive_service, final_local_path, folder_id)
                         
                         # Optional: Mark email as read (or delete)
-                        if args.mark_unread:
+                        if not args.keep_unread:
                             gmail_service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
 
     end_time = datetime.now().strftime("%Y-%m-%d %H:%M")
