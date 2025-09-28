@@ -130,6 +130,57 @@ def upload_to_gdrive(service, file_path, folder_id):
         logging.error(f"An error occurred while uploading the file to Google Drive: {error}")
         return None
 
+def export_to_data_lake(
+    final_local_path,
+    original_filename,
+    report_type,
+    report_date,
+    msg_id,
+    message_payload_headers, # Pass headers to extract sender/subject
+    gdrive_file_id,
+    GDRIVE_TARGET_FOLDER,
+    REPORTS_DIR
+):
+    """
+    Processes the downloaded Excel report, adds metadata, and saves it as a Parquet file
+    in the data lake.
+    """
+    try:
+        # Read the Excel file into a DataFrame
+        df_report = pd.read_excel(final_local_path, header=0)
+
+        # Add metadata fields
+        df_report["report_id"] = str(uuid.uuid4())
+        df_report["report_type"] = report_type
+        df_report["report_date"] = report_date
+        df_report["processed_timestamp"] = datetime.now().isoformat()
+        df_report["source_filename"] = original_filename
+        df_report["email_id"] = msg_id
+        
+        # Extract sender and subject from message headers
+        sender_email = ""
+        subject_email = ""
+        for header in message_payload_headers:
+            if header["name"] == "From":
+                sender_email = header["value"]
+            if header["name"] == "Subject":
+                subject_email = header["value"]
+        df_report["email_sender"] = sender_email
+        df_report["email_subject"] = subject_email
+        df_report["gdrive_file_id"] = gdrive_file_id
+        df_report["gdrive_folder_path"] = GDRIVE_TARGET_FOLDER
+
+        # Define data lake directory and save as Parquet
+        data_lake_dir = os.path.join(REPORTS_DIR, "data_lake")
+        os.makedirs(data_lake_dir, exist_ok=True)
+        parquet_filename = f"{report_type}-{report_date}-{df_report["report_id"].iloc[0]}.parquet"
+        parquet_path = os.path.join(data_lake_dir, parquet_filename)
+        df_report.to_parquet(parquet_path, index=False)
+        logging.info(f"Saved data lake entry: {parquet_filename}")
+
+    except Exception as e:
+        logging.error(f"Error during data lake processing for {os.path.basename(final_local_path)}: {e}")
+
 def main():
     """Main function to process emails and attachments."""
     parser = argparse.ArgumentParser(description="Process OnVolunteers report emails from Gmail and upload to Google Drive.")
@@ -246,40 +297,17 @@ def main():
 
                         # --- Data Lake Processing ---
                         if gdrive_file_id:
-                            try:
-                                # Read the Excel file into a DataFrame
-                                df_report = pd.read_excel(final_local_path, header=0)
-
-                                # Add metadata fields
-                                df_report["report_id"] = str(uuid.uuid4())
-                                df_report["report_type"] = report_type
-                                df_report["report_date"] = report_date
-                                df_report["processed_timestamp"] = datetime.now().isoformat()
-                                df_report["source_filename"] = original_filename
-                                df_report["email_id"] = msg_id
-                                # Extract sender and subject from message headers
-                                sender_email = ""
-                                subject_email = ""
-                                for header in message["payload"]["headers"]:
-                                    if header["name"] == "From":
-                                        sender_email = header["value"]
-                                    if header["name"] == "Subject":
-                                        subject_email = header["value"]
-                                df_report["email_sender"] = sender_email
-                                df_report["email_subject"] = subject_email
-                                df_report["gdrive_file_id"] = gdrive_file_id
-                                df_report["gdrive_folder_path"] = GDRIVE_TARGET_FOLDER
-
-                                # Define data lake directory and save as Parquet
-                                data_lake_dir = os.path.join(REPORTS_DIR, "data_lake")
-                                os.makedirs(data_lake_dir, exist_ok=True)
-                                parquet_filename = f"{report_type}-{report_date}-{df_report["report_id"].iloc[0]}.parquet"
-                                parquet_path = os.path.join(data_lake_dir, parquet_filename)
-                                df_report.to_parquet(parquet_path, index=False)
-                                logging.info(f"Saved data lake entry: {parquet_filename}")
-
-                            except Exception as e:
-                                logging.error(f"Error during data lake processing for {final_filename}: {e}")
+                            export_to_data_lake(
+                                final_local_path,
+                                original_filename,
+                                report_type,
+                                report_date,
+                                msg_id,
+                                message["payload"]["headers"],
+                                gdrive_file_id,
+                                GDRIVE_TARGET_FOLDER,
+                                REPORTS_DIR
+                            )
 
                         # Optional: Mark email as read (or delete)
                         if not args.keep_unread:
