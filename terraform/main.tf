@@ -4,9 +4,9 @@ provider "google" {
 }
 
 resource "google_storage_bucket" "onvolunteers_reports_bucket" {
-  name          = var.gcs_bucket_name
-  location      = var.region
-  force_destroy = false
+  name                        = var.gcs_bucket_name
+  location                    = var.region
+  force_destroy               = false
   uniform_bucket_level_access = true
 
   lifecycle {
