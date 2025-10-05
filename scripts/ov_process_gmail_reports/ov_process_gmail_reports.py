@@ -25,7 +25,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # --- Configuration ---
 load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'gmail_gdrive.env'))
 GDRIVE_CREDENTIALS_FILE = os.path.join(SCRIPT_DIR, os.getenv("GDRIVE_CREDENTIALS_FILE", "credentials.json"))
-LOG_FILE = os.getenv("LOG_FILE", os.path.join(SCRIPT_DIR, "process_gmail_reports.log"))
+LOG_FILE = os.getenv("LOG_FILE", os.path.join(SCRIPT_DIR, "ov_process_gmail_reports.log"))
 REPORTS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, os.getenv("REPORTS_DIR", "reports")))
 TOKEN_FILE = os.path.join(SCRIPT_DIR, "token.json")
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/drive"]
