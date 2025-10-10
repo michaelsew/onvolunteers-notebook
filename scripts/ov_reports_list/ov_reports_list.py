@@ -152,19 +152,18 @@ class ReportGenerator:
         await self.page.locator('button[data-dismiss="modal"]:has-text("Close")').click()
         logging.info("Report closed.")
 
-async def run_scripted_actions():
+async def run_scripted_actions(headless=True):
     """Runs a predefined sequence of report generation actions."""
-    async with ReportGenerator(headless=True) as report_generator:
+    async with ReportGenerator(headless=headless) as report_generator:
         if await report_generator.login():
             await report_generator.navigate_to_reports()
             await report_generator.generate_user_volunteer_hours_report(activity_id=30212) # Parking Patrol 2025-2026
             await report_generator.generate_user_volunteer_hours_report(activity_id=0) # All Activities
 
-async def run_interactive_mode():
+async def run_interactive_mode(headless=True):
     """Runs the original interactive report generation script."""
-    headless_mode = os.getenv("OV_HEADLESS", "false").lower() in ["true", "1"]
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=headless_mode)
+        browser = await p.chromium.launch(headless=headless)
         page = await browser.new_page()
 
         # Navigate to the login page
@@ -293,16 +292,21 @@ async def main():
     parser = argparse.ArgumentParser(description="Generate reports from OnVolunteers.")
     parser.add_argument('--scripted', action='store_true', help='Run in scripted mode.')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging.')
+    parser.add_argument('--headless', type=str, help='Override headless mode setting.')
     args = parser.parse_args()
 
     if args.debug:
         LOGGING_CONFIG["handlers"]["console"]["level"] = "DEBUG"
         logging.config.dictConfig(LOGGING_CONFIG)
 
+    headless_mode = os.getenv("OV_HEADLESS", "false").lower() in ["true", "1"]
+    if args.headless is not None:
+        headless_mode = args.headless.lower() in ['true', 't']
+
     if args.scripted:
-        await run_scripted_actions()
+        await run_scripted_actions(headless=headless_mode)
     else:
-        await run_interactive_mode()
+        await run_interactive_mode(headless=headless_mode)
 
 if __name__ == "__main__":
     asyncio.run(main())
