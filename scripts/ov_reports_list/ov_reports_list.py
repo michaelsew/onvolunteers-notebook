@@ -8,9 +8,44 @@ import os
 from playwright.async_api import async_playwright
 from dotenv import load_dotenv
 import argparse
+import logging
+import logging.config
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# --- Logging Configuration ---
+LOG_DIR = os.path.join(SCRIPT_DIR, "log")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "ov_reports_list.log")
+
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        },
+    },
+    "handlers": {
+        "file": {
+            "class": "logging.FileHandler",
+            "formatter": "default",
+            "filename": LOG_FILE,
+            "level": "DEBUG",
+        },
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "default",
+            "level": "INFO",
+        }
+    },
+    "root": {
+        "handlers": ["file", "console"],
+        "level": "DEBUG",
+    },
+}
+
+logging.config.dictConfig(LOGGING_CONFIG)
 load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'ov.env'))
 
 class ReportGenerator:
@@ -47,7 +82,7 @@ class ReportGenerator:
         password = os.getenv("OV_PASSWORD")
 
         if not username or not password:
-            print("Please set the OV_USERNAME and OV_PASSWORD environment variables.")
+            logging.warning("Please set the OV_USERNAME and OV_PASSWORD environment variables.")
             return False
 
         # Fill in the username and password
@@ -60,22 +95,22 @@ class ReportGenerator:
         # Wait for navigation to complete
         await self.page.wait_for_url("https://portal.onvolunteers.com/Default.aspx")
 
-        print("Successfully logged in to SFX OnVolunteers.")
+        logging.info("Successfully logged in to SFX OnVolunteers.")
 
         # Check if we need to switch to the admin portal
         switch_to_admin_link = self.page.locator('a[href="Switch.aspx?p=0"]')
         if await switch_to_admin_link.is_visible():
-            print("Switching to Admin Portal...")
+            logging.info("Switching to Admin Portal...")
             await switch_to_admin_link.click()
             await self.page.wait_for_url("https://portal.onvolunteers.com/Default.aspx")
 
         # Verify we are in the admin portal
         switch_to_parent_link = self.page.locator('a[href="Switch.aspx?p=1"]')
         if not await switch_to_parent_link.is_visible():
-            print("Could not verify that we are in the admin portal. Exiting.")
+            logging.warning("Could not verify that we are in the admin portal. Exiting.")
             return False
 
-        print("Successfully in the Admin Portal.")
+        logging.info("Successfully in the Admin Portal.")
         return True
 
     async def navigate_to_reports(self):
@@ -88,11 +123,11 @@ class ReportGenerator:
 
         # Wait for the reports page to load
         await self.page.wait_for_url("https://portal.onvolunteers.com/Report.aspx")
-        print("Successfully navigated to the Built-in Reports page.")
+        logging.info("Successfully navigated to the Built-in Reports page.")
 
     async def generate_user_volunteer_hours_report(self, activity_id):
         """Generates the 'User Volunteer Hours' report for a specific activity."""
-        print(f"Generating 'User Volunteer Hours' report for activity ID: {activity_id}")
+        logging.info(f"Generating 'User Volunteer Hours' report for activity ID: {activity_id}")
 
         # Select the "User Volunteer Hours" report
         await self.page.locator('button[data-id="ddlReport"]').click()
@@ -107,15 +142,15 @@ class ReportGenerator:
         # Click on the body to close the dropdown
         await self.page.locator('body').click()
 
-        print(f"Selected activity with ID: {activity_id}")
+        logging.info(f"Selected activity with ID: {activity_id}")
 
         # Generate report
         await self.page.get_by_role("link", name="Generate Report").click()
         
         # Wait for the report to be generated, then close it
-        print("\nReport generated. Closing the report...")
+        logging.info("\nReport generated. Closing the report...")
         await self.page.locator('button[data-dismiss="modal"]:has-text("Close")').click()
-        print("Report closed.")
+        logging.info("Report closed.")
 
 async def run_scripted_actions():
     """Runs a predefined sequence of report generation actions."""
@@ -145,7 +180,7 @@ async def run_interactive_mode():
         password = os.getenv("OV_PASSWORD")
 
         if not username or not password:
-            print("Please set the OV_USERNAME and OV_PASSWORD environment variables.")
+            logging.warning("Please set the OV_USERNAME and OV_PASSWORD environment variables.")
             await browser.close()
             return
 
@@ -159,23 +194,23 @@ async def run_interactive_mode():
         # Wait for navigation to complete
         await page.wait_for_url("https://portal.onvolunteers.com/Default.aspx")
 
-        print("Successfully logged in to SFX OnVolunteers.")
+        logging.info("Successfully logged in to SFX OnVolunteers.")
 
         # Check if we need to switch to the admin portal
         switch_to_admin_link = page.locator('a[href="Switch.aspx?p=0"]')
         if await switch_to_admin_link.is_visible():
-            print("Switching to Admin Portal...")
+            logging.info("Switching to Admin Portal...")
             await switch_to_admin_link.click()
             await page.wait_for_url("https://portal.onvolunteers.com/Default.aspx")
 
         # Verify we are in the admin portal
         switch_to_parent_link = page.locator('a[href="Switch.aspx?p=1"]')
         if not await switch_to_parent_link.is_visible():
-            print("Could not verify that we are in the admin portal. Exiting.")
+            logging.warning("Could not verify that we are in the admin portal. Exiting.")
             await browser.close()
             return
 
-        print("Successfully in the Admin Portal.")
+        logging.info("Successfully in the Admin Portal.")
 
         # Hover over the "Reports" menu
         await page.get_by_role("link", name=" Reports").hover()
@@ -191,67 +226,67 @@ async def run_interactive_mode():
             report_options_text = await page.locator("#ddlReport").inner_text()
             report_options = report_options_text.split('\n')
 
-            print("\nAvailable reports:")
+            logging.info("\nAvailable reports:")
             for i, option in enumerate(report_options):
                 if option != "Select Report":
-                    print(f"{i}. {option}")
-            print(f"{len(report_options)}. exit")
+                    logging.info(f"{i}. {option}")
+            logging.info(f"{len(report_options)}. exit")
 
 
             choice = input("\nEnter the number of the report you want to generate: ")
 
             if choice == str(len(report_options)) or choice.lower() == 'exit':
                 await browser.close()
-                print("Exiting...")
+                logging.info("Exiting...")
                 break
 
             try:
                 choice_index = int(choice)
                 selected_report = report_options[choice_index]
-                print(f"\nYou selected: {selected_report}")
+                logging.info(f"\nYou selected: {selected_report}")
 
                 await page.locator('button[data-id="ddlReport"]').click()
                 await page.locator('.dropdown-menu.open').get_by_role("option", name=selected_report, exact=True).click()
 
                 if selected_report == "User Volunteer Hours":
                     # Get activity options
-                    print("Clicking on the activity dropdown...")
+                    logging.info("Clicking on the activity dropdown...")
                     await page.locator('button[data-id="ddlActivity"]').click()
-                    print("Activity dropdown clicked.")
+                    logging.info("Activity dropdown clicked.")
                     
-                    print("Getting activity options...")
+                    logging.info("Getting activity options...")
                     activity_options_elements = await page.locator('button[data-id="ddlActivity"] ~ .dropdown-menu.open .text').all()
-                    print(f"Found {len(activity_options_elements)} activity options.")
+                    logging.info(f"Found {len(activity_options_elements)} activity options.")
                     activity_options = [await el.inner_text() for el in activity_options_elements]
 
-                    print("\nAvailable activities:")
+                    logging.info("\nAvailable activities:")
                     for i, option in enumerate(activity_options):
-                        print(f"{i}. {option}")
+                        logging.info(f"{i}. {option}")
 
                     activity_choice = input("\nEnter the number of the activity: ")
                     selected_activity = activity_options[int(activity_choice)]
                     await page.locator(f'.dropdown-menu.open .text:has-text("{selected_activity}")').click()
-                    print(f"\nYou selected activity: {selected_activity}")
+                    logging.info(f"\nYou selected activity: {selected_activity}")
 
                     # Generate report
                     await page.get_by_role("link", name="Generate Report").click()
                     
                     # Wait for the report to be generated, then close it
                     # This assumes a "Close" button appears. If not, this will need adjustment.
-                    print("\nReport generated. Closing the report...")
+                    logging.info("\nReport generated. Closing the report...")
                     await page.locator('button[data-dismiss="modal"]:has-text("Close")').click()
-                    print("Report closed.")
+                    logging.info("Report closed.")
 
                 else:
                     await page.get_by_role("link", name="Generate Report").click()
                     # This assumes a "Close" button appears. If not, this will need adjustment.
-                    print("\nReport generated. Closing the report...")
+                    logging.info("\nReport generated. Closing the report...")
                     await page.locator('button[data-dismiss="modal"]:has-text("Close")').click()
-                    print("Report closed.")
+                    logging.info("Report closed.")
 
 
             except (ValueError, IndexError):
-                print("\nInvalid choice. Please try again.")
+                logging.warning("\nInvalid choice. Please try again.")
 
 async def main():
     """Main function to run the script."""

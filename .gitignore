@@ -199,3 +199,4 @@ n8n/stub-workflow.json
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
+scripts/ov_reports_list/log/
