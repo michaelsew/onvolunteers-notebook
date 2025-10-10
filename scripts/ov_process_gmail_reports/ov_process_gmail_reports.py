@@ -11,6 +11,8 @@ from google.auth.transport.requests import Request
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+import argparse
+import uuid
 
 # ov_process_gmail_reports.py
 # This script processes GMail emails containing OnVolunteers reports
@@ -23,7 +25,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # --- Configuration ---
 load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'gmail_gdrive.env'))
 GDRIVE_CREDENTIALS_FILE = os.path.join(SCRIPT_DIR, os.getenv("GDRIVE_CREDENTIALS_FILE", "credentials.json"))
-LOG_FILE = os.getenv("LOG_FILE", os.path.join(SCRIPT_DIR, "process_gmail_reports.log"))
+LOG_FILE = os.getenv("LOG_FILE", os.path.join(SCRIPT_DIR, "ov_process_gmail_reports.log"))
 REPORTS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, os.getenv("REPORTS_DIR", "reports")))
 TOKEN_FILE = os.path.join(SCRIPT_DIR, "token.json")
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/drive"]
@@ -100,16 +102,16 @@ def get_report_type(file_path):
         logging.error(f"An error occurred while reading the excel file: {e}")
         return "unknown"
 
-def get_gdrive_folder_id(service, folder_name):
-    """Finds the ID of a Google Drive folder by its name."""
+def get_gdrive_folder_id(service, folder_name, parent_folder_id=None):
+    """Finds the ID of a Google Drive folder by its name, optionally within a parent folder."""
     try:
-        # This is a simplified search. It will find the first folder with that name.
-        # For a more robust solution, you might need to traverse the folder hierarchy.
         query = f"mimeType='application/vnd.google-apps.folder' and name='{folder_name}'"
+        if parent_folder_id:
+            query += f" and '{parent_folder_id}' in parents"
         results = service.files().list(q=query, fields="files(id, name)").execute()
         items = results.get("files", [])
         if not items:
-            logging.error(f"Google Drive folder '{folder_name}' not found.")
+            logging.warning(f"Google Drive folder '{folder_name}' not found.")
             return None
         return items[0]["id"]
     except HttpError as error:
@@ -128,10 +130,91 @@ def upload_to_gdrive(service, file_path, folder_id):
         logging.error(f"An error occurred while uploading the file to Google Drive: {error}")
         return None
 
+def create_gdrive_folder(service, folder_name, parent_folder_id=None):
+    """Creates a new folder in Google Drive."""
+    try:
+        file_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        if parent_folder_id:
+            file_metadata['parents'] = [parent_folder_id]
+        
+        folder = service.files().create(body=file_metadata, fields='id').execute()
+        logging.info(f"Folder '{folder_name}' created successfully. Folder ID: {folder.get('id')}")
+        return folder.get('id')
+    except HttpError as error:
+        logging.error(f"An error occurred while creating the folder: {error}")
+        return None
+
+def export_to_data_lake(
+    final_local_path,
+    original_filename,
+    report_type,
+    report_date,
+    msg_id,
+    message_payload_headers, # Pass headers to extract sender/subject
+    gdrive_file_id,
+    GDRIVE_TARGET_FOLDER,
+    REPORTS_DIR
+):
+    """
+    Processes the downloaded Excel report, adds metadata, and saves it as a Parquet file
+    in the data lake.
+    """
+    try:
+        # Read the Excel file into a DataFrame
+        df_report = pd.read_excel(final_local_path, header=0)
+
+        # Add metadata fields
+        df_report["report_id"] = str(uuid.uuid4())
+        df_report["report_type"] = report_type
+        df_report["report_date"] = report_date
+        df_report["processed_timestamp"] = datetime.now().isoformat()
+        df_report["source_filename"] = original_filename
+        df_report["email_id"] = msg_id
+        
+        # Extract sender and subject from message headers
+        sender_email = ""
+        subject_email = ""
+        for header in message_payload_headers:
+            if header["name"] == "From":
+                sender_email = header["value"]
+            if header["name"] == "Subject":
+                subject_email = header["value"]
+        df_report["email_sender"] = sender_email
+        df_report["email_subject"] = subject_email
+        df_report["gdrive_file_id"] = gdrive_file_id
+        df_report["gdrive_folder_path"] = GDRIVE_TARGET_FOLDER
+
+        # Define data lake directory and save as Parquet
+        data_lake_dir = os.path.join(REPORTS_DIR, "data_lake")
+        os.makedirs(data_lake_dir, exist_ok=True)
+        parquet_filename = f"{report_type}-{report_date}-{df_report["report_id"].iloc[0]}.parquet"
+        parquet_path = os.path.join(data_lake_dir, parquet_filename)
+        df_report.to_parquet(parquet_path, index=False)
+        logging.info(f"Saved data lake entry: {parquet_filename}")
+
+    except Exception as e:
+        logging.error(f"Error during data lake processing for {os.path.basename(final_local_path)}: {e}")
+
 def main():
     """Main function to process emails and attachments."""
+    parser = argparse.ArgumentParser(description="Process OnVolunteers report emails from Gmail and upload to Google Drive.")
+    parser.add_argument(
+        "--keep-unread",
+        action="store_true",
+        default=False,
+        help="Keep processed emails as unread (default: False, i.e., mark as read)"
+    )
+    args = parser.parse_args()
+
     start_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     logging.info(f"### ov_process_gmail_reports STARTED {start_time} ###")
+    if args.keep_unread:
+        logging.info("Processed emails will be kept unread.")
+    else:
+        logging.info("Processed emails will be marked as read.")
     logging.info("Starting email processing...")
     creds = get_credentials()
     gmail_service = build("gmail", "v1", credentials=creds)
@@ -145,11 +228,11 @@ def main():
         logging.info("No new report emails found.")
         return
 
-    # Find the Google Drive folder ID
-    # We are taking the last part of the path as the folder name to search for
-    target_folder_name = os.path.basename(GDRIVE_TARGET_FOLDER)
-    folder_id = get_gdrive_folder_id(drive_service, target_folder_name)
-    if not folder_id:
+    # Find the Google Drive folder ID for the main reports folder
+    target_folder_name = "Reports"
+    reports_folder_id = get_gdrive_folder_id(drive_service, target_folder_name)
+    if not reports_folder_id:
+        logging.error(f"Main Google Drive folder '{target_folder_name}' not found under the specified path in GDRIVE_TARGET_FOLDER. Please ensure the folder exists and the path is correct.")
         return
 
     for msg in messages:
@@ -169,11 +252,8 @@ def main():
 
                     report_type = get_report_type(local_path)
                     if report_type != "unknown":
-                        # Extract date from original filename (e.g., OnVolunteers_Volunteer_Hours_Report2025-09-27__125741.xlsx)
-                        # The date is typically before the double underscore and after 'Report'
                         try:
                             date_str = original_filename.split("Report")[-1].split("__")[0]
-                            # Attempt to parse various date formats
                             for fmt in ("%Y-%m-%d", "%Y%m%d"):
                                 try:
                                     report_date = datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
@@ -187,7 +267,6 @@ def main():
                             logging.warning(f"Could not extract date from filename: {original_filename}. Using current date.")
                             report_date = datetime.now().strftime("%Y-%m-%d")
 
-                        # Determine the subdirectory and base filename
                         if report_type == "parking":
                             subdir = "parking-hours"
                             base_name = f"parking-hours-{report_date}.xlsx"
@@ -195,7 +274,6 @@ def main():
                             subdir = "volunteer-hours"
                             base_name = f"volunteer-hours-{report_date}.xlsx"
                         else:
-                            # Fallback for unknown types, though we filter for them
                             subdir = "unknown-reports"
                             base_name = f"unknown-{report_date}.xlsx"
 
@@ -205,10 +283,8 @@ def main():
                         final_filename = base_name
                         final_local_path = os.path.join(target_dir, final_filename)
 
-                        # Conflict resolution logic
                         if os.path.exists(final_local_path):
                             logging.info(f"File {final_filename} already exists. Checking for timestamped version.")
-                            # Try saving with a more specific timestamp
                             current_time = datetime.now().strftime("%H%M")
                             timestamped_filename = f"{report_type}-hours-{report_date}_{current_time}.xlsx"
                             timestamped_local_path = os.path.join(target_dir, timestamped_filename)
@@ -222,15 +298,40 @@ def main():
                                 final_local_path = timestamped_local_path
                                 final_filename = timestamped_filename
                         
-                        # Rename the downloaded file to its final name and location
                         os.rename(local_path, final_local_path)
                         logging.info(f"Renamed file to: {final_filename}")
 
-                        # Upload to Google Drive
-                        upload_to_gdrive(drive_service, final_local_path, folder_id)
-                        
-                        # Optional: Mark email as read (or delete)
-                        gmail_service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
+                        # Get or create the subdirectory in Google Drive
+                        gdrive_subdir_id = get_gdrive_folder_id(drive_service, subdir, parent_folder_id=reports_folder_id)
+                        if not gdrive_subdir_id:
+                            logging.info(f"Google Drive folder '{subdir}' not found, creating it.")
+                            gdrive_subdir_id = create_gdrive_folder(drive_service, subdir, parent_folder_id=reports_folder_id)
+
+                        if gdrive_subdir_id:
+                            gdrive_folder_path = f"{GDRIVE_TARGET_FOLDER}/{subdir}"
+                            logging.info(f"Uploading {final_filename} to Google Drive folder: {gdrive_folder_path}")
+                            gdrive_file_id = upload_to_gdrive(drive_service, final_local_path, gdrive_subdir_id)
+                            
+                            if gdrive_file_id:
+                                export_to_data_lake(
+                                    final_local_path,
+                                    original_filename,
+                                    report_type,
+                                    report_date,
+                                    msg_id,
+                                    message["payload"]["headers"],
+                                    gdrive_file_id,
+                                    gdrive_folder_path,
+                                    REPORTS_DIR
+                                )
+                        else:
+                            logging.error(f"Could not find or create Google Drive folder '{subdir}'.")
+
+                        if not args.keep_unread:
+                            gmail_service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
+                            logging.info(f"Email {msg_id} marked as read.")
+                        else:
+                            logging.info(f"Email {msg_id} left unread as per --keep-unread flag.")
 
     end_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     logging.info(f"### ov_process_gmail_reports FINISHED {end_time} ###")

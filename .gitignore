@@ -12,6 +12,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
+develop-eggs/
 dist/
 downloads/
 eggs/
@@ -122,6 +123,8 @@ env/
 venv/
 ENV/
 env.bak/
+env.bak/
+venv.bak/
 venv.bak/
 
 # Spyder project settings
@@ -190,3 +193,9 @@ scripts/ov_process_gmail_reports/reports/
 
 sample/
 n8n/stub-workflow.json
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
