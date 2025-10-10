@@ -4,6 +4,7 @@ import numpy as np
 import logging
 import logging.config
 import os
+import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -41,9 +42,13 @@ LOGGING_CONFIG = {
 
 logging.config.dictConfig(LOGGING_CONFIG)
 
+# --- Argument Parsing ---
+parser = argparse.ArgumentParser(description='Analyze an OnVolunteers report.')
+parser.add_argument('file_path', type=str, help='The path to the report file.')
+args = parser.parse_args()
+
 # Load the Excel file
-file_path = 'reports/volunteer-hours/volunteer-hours-2025-10-10.xlsx'
-df = pd.read_excel(file_path)
+df = pd.read_excel(args.file_path)
 
 # Data Cleaning and Preparation
 # It's common for column names to have leading/trailing spaces
