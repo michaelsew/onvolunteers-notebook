@@ -200,3 +200,4 @@ n8n/stub-workflow.json
 *.tfstate.backup
 .terraform.lock.hcl
 scripts/ov_reports_list/log/
+scripts/pr_body.md
