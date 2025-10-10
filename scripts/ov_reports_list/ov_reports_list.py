@@ -292,7 +292,12 @@ async def main():
     """Main function to run the script."""
     parser = argparse.ArgumentParser(description="Generate reports from OnVolunteers.")
     parser.add_argument('--scripted', action='store_true', help='Run in scripted mode.')
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging.')
     args = parser.parse_args()
+
+    if args.debug:
+        LOGGING_CONFIG["handlers"]["console"]["level"] = "DEBUG"
+        logging.config.dictConfig(LOGGING_CONFIG)
 
     if args.scripted:
         await run_scripted_actions()
