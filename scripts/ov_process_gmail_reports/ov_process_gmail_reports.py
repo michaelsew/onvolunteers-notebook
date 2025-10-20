@@ -8,6 +8,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -27,7 +28,12 @@ load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'gmail_gdrive.env'))
 GDRIVE_CREDENTIALS_FILE = os.path.join(SCRIPT_DIR, os.getenv("GDRIVE_CREDENTIALS_FILE", "credentials.json"))
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(SCRIPT_DIR, "ov_process_gmail_reports.log"))
 REPORTS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, os.getenv("REPORTS_DIR", "reports")))
-TOKEN_FILE = os.path.join(SCRIPT_DIR, "token.json")
+
+# --- Create a .tmp directory for the token file ---
+TMP_DIR = os.path.join(SCRIPT_DIR, ".tmp")
+os.makedirs(TMP_DIR, exist_ok=True)
+TOKEN_FILE = os.path.join(TMP_DIR, "token.json")
+
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/drive"]
 GDRIVE_TARGET_FOLDER = "/My Drive/PTA 2025-2026 SHARED FOLDER/SubCommittees/OnVolunteers/Reports"
 
@@ -57,7 +63,12 @@ def get_credentials():
         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except RefreshError as e:
+                logging.critical(f"FATAL: Your authentication token has expired or been revoked: {e}")
+                logging.critical(f"Please delete the 'token.json' file in the '.tmp' directory and run the script again to re-authenticate.")
+                exit(1) # Exit the script gracefully
         else:
             flow = InstalledAppFlow.from_client_secrets_file(GDRIVE_CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0)
@@ -216,9 +227,15 @@ def main():
     else:
         logging.info("Processed emails will be marked as read.")
     logging.info("Starting email processing...")
-    creds = get_credentials()
-    gmail_service = build("gmail", "v1", credentials=creds)
-    drive_service = build("drive", "v3", credentials=creds)
+    try:
+        creds = get_credentials()
+        gmail_service = build("gmail", "v1", credentials=creds)
+        drive_service = build("drive", "v3", credentials=creds)
+    except RefreshError:
+        # The get_credentials function already logs the detailed error and instructions.
+        # This catch block is an additional safeguard.
+        logging.critical("Could not refresh authentication token. Please follow the instructions above.")
+        return
 
     if not os.path.exists(REPORTS_DIR):
         os.makedirs(REPORTS_DIR)
