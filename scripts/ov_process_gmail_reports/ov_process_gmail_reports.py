@@ -24,7 +24,7 @@ import uuid
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- Configuration ---
-load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'gmail_gdrive.env'))
+load_dotenv(dotenv_path=os.path.join(SCRIPT_DIR, 'gmail_gdrive.env'), override=True)
 GDRIVE_CREDENTIALS_FILE = os.path.join(SCRIPT_DIR, os.getenv("GDRIVE_CREDENTIALS_FILE", "credentials.json"))
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(SCRIPT_DIR, "ov_process_gmail_reports.log"))
 REPORTS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, os.getenv("REPORTS_DIR", "reports")))
@@ -66,9 +66,9 @@ def get_credentials():
             try:
                 creds.refresh(Request())
             except RefreshError as e:
-                logging.critical(f"FATAL: Your authentication token has expired or been revoked: {e}")
-                logging.critical(f"Please delete the 'token.json' file in the '.tmp' directory and run the script again to re-authenticate.")
-                exit(1) # Exit the script gracefully
+                logging.warning(f"Authentication token expired or revoked: {e}. Deleting token and re-authenticating.")
+                os.remove(TOKEN_FILE)
+                creds = None # Force re-authentication
         else:
             flow = InstalledAppFlow.from_client_secrets_file(GDRIVE_CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0)
